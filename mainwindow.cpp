@@ -6,121 +6,201 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    fileSystemModel = new QFileSystemModel();
-    fileSystemModel->setRootPath(QDir::currentPath());
-    fileSystemModel->setFilter(QDir::Dirs|QDir::Drives|QDir::NoDotAndDotDot);
-    ui->directorySelectionView->setModel(fileSystemModel);
-    ui->directorySelectionView->setHeaderHidden(true);
-    ui->directorySelectionView->header()->setSectionHidden(1, true);
-    ui->directorySelectionView->header()->setSectionHidden(2, true);
-    ui->directorySelectionView->header()->setSectionHidden(3, true);
-    ui->resultList->setSelectionMode(QAbstractItemView::NoSelection);
-    ui->resultList->setAlternatingRowColors(true);
+    ui->searchResultDisplay->setSelectionMode(QAbstractItemView::NoSelection);
+    ui->searchResultDisplay->setAlternatingRowColors(true);
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
-    delete fileSystemModel;
 }
 
-// Search for sidecar files
-void MainWindow::on_findButton_clicked()
+// Set sidecar files search directory
+void MainWindow::on_browseSearchDirectoryButton_clicked()
 {
-    ui->selectedSearchPath->setText(
-                fileSystemModel->filePath(
-                    ui->directorySelectionView->currentIndex()));
-    if (QFile::exists(ui->selectedSearchPath->text())) {
-        // Suspend interface
-        QString findButtonText = ui->findButton->text();
-        ui->findButton->setText("Searching...");
+    // Get the choice from the user
+    QString path = QFileDialog::getExistingDirectory(
+                this,
+                "Select the directory where to look for sidecar files.",
+                lastSearchPath);
 
-        // Reset interface
-        ui->dumpButton->setEnabled(false);
-        ui->findButton->setEnabled(false);
-        ui->setDumpDirectoryButton->setEnabled(false);
-        ui->selectedDumpDirectory->setText("");
-        qApp->processEvents();
-
-        // Reset database
-        ui->resultList->clear();
-        sidecarFileStructure.clear();
-
-        // Get user specified file extensions
-        QString rawFilesExtension = ui->rawExtensionInput->text();
-        int extensionSize = rawFilesExtension.size();
-        QString sidecarFilesExtension = ui->sidecarExtensionInput->text();
-
-        // Initialize file search
-        QDirIterator i(
-                    ui->selectedSearchPath->text(),
-                    QStringList("*." + rawFilesExtension),
-                    QDir::Files,
-                    QDirIterator::Subdirectories);
-        quint64 numberRawFiles = 0;
-        quint64 numberSidecarFiles = 0;
-        quint64 totalFileSize = 0;
-        QString rawFilename = "";
-        QString baseFilename = "";
-        QString sidecarFilename = "";
-        QString currentPath = "";
-        bool checkTimeCoherence = ui->timeCoherenceOption->isChecked();
-        bool valid;
-        while (i.hasNext()) {
-            rawFilename = i.next();
-            numberRawFiles++;
-            baseFilename = rawFilename.chopped(extensionSize + 1);
-            sidecarFilename = baseFilename + "." + sidecarFilesExtension;
-            if (QFile::exists(sidecarFilename)) {
-                valid = true;
-                QFileInfo sidecarFileInfo(sidecarFilename);
-                if (checkTimeCoherence) {
-                    QFileInfo rawFileInfo(rawFilename);
-                    valid = rawFileInfo.lastModified() == sidecarFileInfo.lastModified();
-                }
-                if (valid) {
-                    currentPath = sidecarFileInfo.path();
-                    if (!sidecarFileStructure.contains(currentPath)) {
-                        sidecarFileStructure.insert(currentPath, QList<QString>());
-                    }
-                    sidecarFileStructure[currentPath].append(sidecarFilename);
-                    numberSidecarFiles++;
-                    totalFileSize += sidecarFileInfo.size();
-                }
-            }
-        }
-
-        // Save database
-        QMap<QString, QList<QString>>::iterator j;
-        for (j = sidecarFileStructure.begin(); j != sidecarFileStructure.end(); ++j) {
-            ui->resultList->addItems(j.value());
-        }
-
-        // Update interface
-        QLocale locale = this->locale();
-        ui->numberRawFilesDisplay->setText(locale.toString(numberRawFiles));
-        ui->numberSidecarFilesDisplay->setText(locale.toString(numberSidecarFiles));
-        ui->totalSizeDisplay->setText(locale.formattedDataSize(totalFileSize));
-        if (numberSidecarFiles > 0) {
-            ui->setDumpDirectoryButton->setEnabled(true);
-        }
-
-        // Reactivate interface
-        ui->findButton->setText(findButtonText);
-        ui->findButton->setEnabled(true);
+    if (path != "") {
+        QDir directory(path);
+        // Update the selected directory display
+        ui->searchPathInput->setText(directory.path());
+        directory.cdUp();
+        lastSearchPath = directory.path();
+        // Activate the search button
+        ui->searchSidecarFilesButton->setEnabled(true);
     }
 }
 
 // Set sidecar files dump directory
-void MainWindow::on_setDumpDirectoryButton_clicked()
+void MainWindow::on_browseDumpDirectoryButton_clicked()
 {
-    QString directory = QFileDialog::getExistingDirectory(
+    // Get the choice from the user
+    QString path = QFileDialog::getExistingDirectory(
                 this,
-                "Select a directory where to dump the sidecar files.");
-    if (directory != "") {
-        QString selectedSearchPath = ui->selectedSearchPath->text();
-        ui->selectedDumpDirectory->setText(directory + "/" + \
-                selectedSearchPath.remove(':').replace('/', '_'));
-        ui->dumpButton->setEnabled(true);
+                "Select the directory where to dump the sidecar files.",
+                lastDumpPath);
+
+    if (path != "") {
+        QDir directory(path);
+        // Update the selected directory display
+        ui->dumpDirectoryInput->setText(directory.path());
+        directory.cdUp();
+        lastDumpPath = directory.path();
     }
 }
+
+void MainWindow::on_dumpFolderNameInput_textChanged(const QString &arg1)
+{
+    ui->dumpFolderNameInput->setToolTip(arg1);
+}
+
+void MainWindow::on_autoDumpFolderNameOption_toggled(bool checked)
+{
+    ui->dumpFolderNameInput->setEnabled(!checked);
+    emit on_searchPathInput_textChanged(
+                ui->searchPathInput->text());
+}
+
+void MainWindow::on_searchPathInput_textChanged(const QString &arg1)
+{
+    if(ui->autoDumpFolderNameOption->isChecked()) {
+        if (QFile::exists(arg1)) {
+            // Make up a dump folder name
+            QString folderName(arg1);
+            QString to_remove = ":.", to_replace = "/_ ";
+            for (QChar c : to_remove) {
+                folderName.remove(c);
+            }
+            for (QChar c : to_replace) {
+                folderName.replace(c, "_");
+            }
+            ui->dumpFolderNameInput->setText(folderName);
+        }
+    }
+}
+
+// Search for sidecar files
+void MainWindow::on_searchSidecarFilesButton_clicked()
+{
+    // Validate user inputs
+    QString message;
+    bool invalidInput = false;
+
+    if (ui->sidecarExtensionInput->text() == "") {
+        message = "Please specify a valid sidecar file extension.";
+        invalidInput = true;
+    }
+
+    if (ui->rawExtensionInput->text() == "") {
+        message = "Please specify a valid raw file extension.";
+        invalidInput = true;
+    }
+
+    if (!QFile::exists(ui->searchPathInput->text())) {
+        message = "Please specify a valid search directory.";
+        invalidInput = true;
+    }
+
+    if (invalidInput) {
+        QMessageBox::information(this, "Invalid input", message);
+        return;
+    }
+
+    // Suspend interface
+    ui->searchSidecarFilesButton->setEnabled(false);
+    QString searchButtonTexte = ui->searchSidecarFilesButton->text();
+    ui->searchSidecarFilesButton->setText("Searching...");
+
+    // Reset database
+    ui->searchResultDisplay->clear();
+    ui->dumpSidecarFilesButton->setEnabled(false);
+    sidecarFileStructure.clear();
+    qApp->processEvents();
+
+    // Get user specified file extensions
+    QString rawFilesExtension = ui->rawExtensionInput->text();
+    QString sidecarFilesExtension = ui->sidecarExtensionInput->text();
+
+    // Initialize file search
+    QDirIterator i(
+                ui->searchPathInput->text(),
+                QStringList("*." + rawFilesExtension),
+                QDir::Files,
+                QDirIterator::Subdirectories);
+    quint64 numberRawFiles = 0;
+    quint64 numberSidecarFiles = 0;
+    quint64 totalFileSize = 0;
+    QString rawFilename = "";
+    QString sidecarFilename = "";
+    QString currentPath = "";
+    bool checkTimeCoherence = ui->timeCoherenceOption->isChecked();
+    while (i.hasNext()) {
+        rawFilename = i.next();
+        numberRawFiles++;
+        sidecarFilename = rawFilename.chopped(rawFilesExtension.size()) + \
+                sidecarFilesExtension;
+        if (QFile::exists(sidecarFilename)) {
+            QFileInfo sidecarFileInfo(sidecarFilename);
+            if (checkTimeCoherence) {
+                QFileInfo rawFileInfo(rawFilename);
+                if (rawFileInfo.lastModified() != sidecarFileInfo.lastModified()) {
+                    continue;
+                }
+            }
+            currentPath = sidecarFileInfo.path();
+            if (!sidecarFileStructure.contains(currentPath)) {
+                sidecarFileStructure.insert(currentPath, QList<QString>());
+            }
+            sidecarFileStructure[currentPath].append(sidecarFilename);
+            numberSidecarFiles++;
+            totalFileSize += sidecarFileInfo.size();
+        }
+    }
+
+    // Save database
+    QMap<QString, QList<QString>>::iterator j;
+    for (j = sidecarFileStructure.begin(); j != sidecarFileStructure.end(); ++j) {
+        ui->searchResultDisplay->addItems(j.value());
+    }
+
+    // Update interface
+    QLocale locale = this->locale();
+    ui->numberRawFilesDisplay->setText(locale.toString(numberRawFiles));
+    ui->numberSidecarFilesDisplay->setText(locale.toString(numberSidecarFiles));
+    ui->totalSizeDisplay->setText(locale.formattedDataSize(totalFileSize));
+    if (numberSidecarFiles > 0) {
+        ui->dumpSidecarFilesButton->setEnabled(true);
+    }
+
+    // Reactivate interface
+    ui->searchSidecarFilesButton->setText(searchButtonTexte);
+    ui->searchSidecarFilesButton->setEnabled(true);
+}
+
+void MainWindow::on_dumpSidecarFilesButton_clicked()
+{
+    // Validate user inputs
+    QString message;
+    bool invalidInput = false;
+
+    if (ui->dumpFolderNameInput->text() == "") {
+        message = "Please specify a valid dump folder name.";
+        invalidInput = true;
+    }
+
+    if (!QFile::exists(ui->dumpDirectoryInput->text())) {
+        message = "Please specify a valid dump directory.";
+        invalidInput = true;
+    }
+
+    if (invalidInput) {
+        QMessageBox::information(this, "Invalid input", message);
+        return;
+    }
+}
+
+

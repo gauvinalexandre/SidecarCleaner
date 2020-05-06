@@ -1,9 +1,10 @@
-#ifndef MAINWINDOW_H
+﻿#ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
 #include <QMainWindow>
 #include <QFileSystemModel>
 #include <QFileDialog>
+#include <QMessageBox>
 #include <QList>
 #include <QMap>
 #include <QDateTime>
@@ -21,12 +22,18 @@ public:
     ~MainWindow();
 
 private slots:
-    void on_findButton_clicked();
-    void on_setDumpDirectoryButton_clicked();
+    void on_browseSearchDirectoryButton_clicked();
+    void on_browseDumpDirectoryButton_clicked();
+    void on_searchSidecarFilesButton_clicked();
+    void on_dumpSidecarFilesButton_clicked();
+    void on_dumpFolderNameInput_textChanged(const QString &arg1);
+    void on_autoDumpFolderNameOption_toggled(bool checked);
+    void on_searchPathInput_textChanged(const QString &arg1);
 
 private:
     Ui::MainWindow *ui;
-    QFileSystemModel* fileSystemModel;
+    QString lastSearchPath = QDir::homePath();
+    QString lastDumpPath = QDir::homePath();
     QMap<QString, QList<QString>> sidecarFileStructure;
 };
 #endif // MAINWINDOW_H
