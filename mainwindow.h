@@ -8,6 +8,7 @@
 #include <QList>
 #include <QMap>
 #include <QDateTime>
+#include <QtDebug>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -34,6 +35,7 @@ private:
     Ui::MainWindow *ui;
     QString lastSearchPath = QDir::homePath();
     QString lastDumpPath = QDir::homePath();
+    QString sidecarFileStructureRoot;
     QMap<QString, QList<QString>> sidecarFileStructure;
 };
 #endif // MAINWINDOW_H
