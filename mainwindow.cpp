@@ -90,18 +90,18 @@ void MainWindow::on_searchSidecarFilesButton_clicked()
     QString message;
     bool invalidInput = false;
 
-    if (ui->sidecarExtensionInput->text() == "") {
-        message = "Please specify a valid sidecar file extension.";
+    if (ui->sidecarSuffixInput->text() == "") {
+        message = "Please specify a valid sidecar file suffix.";
         invalidInput = true;
     }
 
-    if (ui->rawExtensionInput->text() == "") {
-        message = "Please specify a valid raw file extension.";
+    if (ui->rawSuffixInput->text() == "") {
+        message = "Please specify a valid raw file suffix.";
         invalidInput = true;
     }
 
-    if (ui->rawExtensionInput->text().toLower() == ui->sidecarExtensionInput->text().toLower()) {
-        message = "Please specify a sidecar file extension that is different "
+    if (ui->rawSuffixInput->text().toLower() == ui->sidecarSuffixInput->text().toLower()) {
+        message = "Please specify a sidecar file suffix that is different "
                   "from the raw file.";
         invalidInput = true;
     }
@@ -128,13 +128,13 @@ void MainWindow::on_searchSidecarFilesButton_clicked()
     sidecarFileStructureRoot = ui->searchPathInput->text();
     qApp->processEvents();
 
-    // Get user specified file extensions
-    QString rawFilesExtension = ui->rawExtensionInput->text();
-    QString sidecarFilesExtension = ui->sidecarExtensionInput->text();
+    // Get user specified file suffixes
+    QString rawFilesSuffix = ui->rawSuffixInput->text();
+    QString sidecarFilesSuffix = ui->sidecarSuffixInput->text();
 
     // Initialize file search
     QDirIterator i(sidecarFileStructureRoot,
-                   QStringList("*." + rawFilesExtension),
+                   QStringList("*" + rawFilesSuffix),
                    QDir::Files,
                    QDirIterator::Subdirectories);
     quint64 numberRawFiles = 0;
@@ -147,8 +147,8 @@ void MainWindow::on_searchSidecarFilesButton_clicked()
     while (i.hasNext()) {
         rawFilename = i.next();
         numberRawFiles++;
-        sidecarFilename = rawFilename.chopped(rawFilesExtension.size()) + \
-                sidecarFilesExtension;
+        sidecarFilename = rawFilename.chopped(rawFilesSuffix.size()) + \
+                sidecarFilesSuffix;
         if (QFile::exists(sidecarFilename)) {
             QFileInfo sidecarFileInfo(sidecarFilename);
             if (checkTimeCoherence) {
